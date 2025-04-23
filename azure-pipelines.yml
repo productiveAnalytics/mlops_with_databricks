@@ -1,0 +1,90 @@
+# azure-pipelines.yml
+    
+trigger:
+  branches:
+    include:
+      - develop
+      - main
+
+variables:
+  - group: DAB-Secrets  # Azure Key Vault linked variable group
+  - name: WorkspaceRoot
+    value: /Live  # Deployment target folder
+  - name: BundleName
+    value: mlops-bundle
+
+stages:
+- stage: Dev
+  displayName: Deploy to Development env
+  condition: eq(variables['Build.SourceBranchName'], 'develop')
+  jobs:
+  - deployment: DeployDev
+    environment: Dev
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.10'
+
+          - script: pip install databricks-cli
+            displayName: Install Databricks CLI
+
+          - task: AzureCLI@2
+            name: SetDevVars
+            inputs:
+              azureSubscription: 'DAB-ServiceConnection-Dev'
+              scriptType: 'pscore'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                $env:DATABRICKS_HOST = "$(DAB-Workspace-Url-Dev)"
+                $env:DATABRICKS_TOKEN = "$(DAB-SPN-Token-Dev)"
+                Write-Host "##vso[task.setvariable variable=DATABRICKS_HOST]$env:DATABRICKS_HOST"
+                Write-Host "##vso[task.setvariable variable=DATABRICKS_TOKEN]$env:DATABRICKS_TOKEN"
+
+          - script: |
+              databricks bundle validate
+              databricks bundle deploy --target dev --target-dir $(WorkspaceRoot) --force 
+            displayName: Validate and Deploy Bundle
+            env:
+              DATABRICKS_HOST: $(DATABRICKS_DEV_HOST)
+              DATABRICKS_TOKEN: $(DATABRICKS_DEV_TOKEN)
+
+- stage: Prod
+  displayName: Deploy to Production env
+  dependsOn: Dev
+  condition: succeeded()
+  jobs:
+  - deployment: DeployProd
+    environment: Prod
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.10'
+
+          - script: pip install databricks-cli
+            displayName: Install Databricks CLI
+
+          - task: AzureCLI@2
+            name: SetProdVars
+            inputs:
+              azureSubscription: 'DAB-ServiceConnection-Prod'
+              scriptType: 'pscore'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                $env:DATABRICKS_HOST = "$(DAB-Workspace-Url-Prod)"
+                $env:DATABRICKS_TOKEN = "$(DAB-SPN-Token-Prod)"
+                Write-Host "##vso[task.setvariable variable=DATABRICKS_HOST]$env:DATABRICKS_HOST"
+                Write-Host "##vso[task.setvariable variable=DATABRICKS_TOKEN]$env:DATABRICKS_TOKEN"
+
+          - script: |
+              databricks bundle validate
+              databricks bundle deploy --target prod --target-dir $(WorkspaceRoot) --force
+            displayName: Validate and Deploy Bundle
+            env:
+              DATABRICKS_HOST: $(DATABRICKS_PROD_HOST)
+              DATABRICKS_TOKEN: $(DATABRICKS_PROD_TOKEN)
