@@ -1,0 +1,35 @@
+# databricks.yml
+bundle:
+  name: mlops-with-dab
+  include:
+    - jobs/**
+    - pipelines/**
+    - notebooks/**
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://adb-xxxx.x.azuredatabricks.net
+    #storage:
+    #  root: $(WorkspaceRoot)/dev
+    resources:
+      jobs:
+        tags:
+          environment: dev
+      pipelines:
+        tags:
+          environment: dev
+
+  prod:
+    mode: production
+    workspace:
+      host: https://adb-yyyy.y.azuredatabricks.net
+    resources:
+      jobs:
+        tags:
+          environment: prod
+      pipelines:
+        tags:
+          environment: prod
